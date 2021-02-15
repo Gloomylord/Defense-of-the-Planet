@@ -1,5 +1,5 @@
 function load() {
-    let type = "canvas";
+    let type = "WebGL";
     if (!PIXI.utils.isWebGLSupported()) {
         type = "canvas"
     }
@@ -12,6 +12,7 @@ function load() {
             antialias: true,
             transparent: false,
             resolution: 1,
+            sortableChildren: true
         }
     );
 
@@ -30,6 +31,7 @@ function load() {
     let earth;
     let back;
     let text;
+    let bestCount = localStorage.getItem("spaceGameBestCount");
     let bulletCount = 0;
 
     let phi = 0;
@@ -205,22 +207,22 @@ function load() {
             cat.anchor.y = .5;
 
             text = new PIXI.Text('Click to start', {
-                fontFamily: 'Arial',
+                fontFamily: 'Helvetica',
                 fontSize: 24,
-                fill: 0xff3030,
+                fill: 'white',
                 align: 'center',
             });
-            text.x = text.width;
-            text.y = text.height;
+            text.x = window.innerWidth - text.width * 1.5;
+            text.y = 30;
+            text.zIndex = 1000;
+            text.style.fontSize = 24;
             text.anchor.x = .5;
-            text.anchor.y = .5;
 
             app.stage.addChild(back);
             app.stage.addChild(text);
             app.stage.addChild(cat);
             app.stage.addChild(earth.current);
             app.stage.addChild(gun);
-
 
 
             for (let i = 1; i < 5; i++) {
@@ -258,7 +260,6 @@ function load() {
                             this.currentTime = 0;
                         }
                     });
-
                     boomSounds.push(sound);
                 }
             }
@@ -269,7 +270,8 @@ function load() {
         }
 
         function loop() {
-            text.text = "Count " + count;
+            app.stage.removeChild(text);
+            text.text = "Count: " + count + (bestCount ? "\nBest: " + bestCount : '');
             phi += .005;
             r = 400 * Math.cos(6 * phi);
             let dr = -400 * 6 * Math.sin(6 * phi);
@@ -370,6 +372,7 @@ function load() {
                     })
                 }
             });
+            app.stage.addChild(text);
             app.renderer.render(app.stage);
         }
 
@@ -417,8 +420,12 @@ function load() {
                         },
                         draw(progress) {
                             text.style.fontSize = 24 + 50 * progress;
-                            text.x = 30 + (centerX - 30) * progress;
-                            text.y = 5 + (centerY / 2 - 5) * progress;
+                            text.x = window.innerWidth - (centerX) * progress;
+                            text.y = centerY / 2 * progress;
+                        },
+                        end: () => {
+                            text.text = text.text + "\nClick to restart";
+                            window.addEventListener('click', restart);
                         }
                     });
                 }
@@ -433,21 +440,24 @@ function load() {
             earth.current.y = centerY;
             gun.x = centerX + 120 * Math.cos(gun.radian);
             gun.y = centerY + 120 * Math.sin(gun.radian);
-            if(window.innerWidth > back.width){
-                back.height = back.height * window.innerWidth / back.width;
-                back.width = window.innerWidth;
+            if (window.innerWidth > back.width || window.innerHeight > back.height) {
+                if (back.height * window.innerWidth / back.width > window.innerHeight) {
+                    back.height = back.height * window.innerWidth / back.width;
+                    back.width = window.innerWidth;
+                } else {
+                    back.width = back.width * window.innerHeight / back.height;
+                    back.height = window.innerHeight;
+                }
             }
-            if(window.innerHeight > back.height){
-                back.width = back.width * window.innerHeight / back.height;
-                back.height = window.innerHeight;
-            }
-            if(window.innerWidth > 1920 && window.innerWidth < back.width){
-                back.height = back.height * window.innerWidth / back.width;
-                back.width  = window.innerWidth
-            }
-            if(window.innerHeight > 1080 && window.innerHeight < back.height){
-                back.width = back.width * window.innerHeight / back.height;
-                back.height = window.innerHeight;
+            if ((window.innerWidth > 1920 && window.innerWidth < back.width) ||
+                (window.innerHeight > 1080 && window.innerHeight < back.height)) {
+                if (back.height * window.innerWidth / back.width > window.innerHeight) {
+                    back.height = back.height * window.innerWidth / back.width;
+                    back.width = window.innerWidth
+                } else {
+                    back.width = back.width * window.innerHeight / back.height;
+                    back.height = window.innerHeight;
+                }
             }
         });
         window.addEventListener('click', () => {
@@ -459,12 +469,36 @@ function load() {
             }
             state = "pause";
         });
+
+        function restart() {
+            Object.values(bulletsObj).forEach((bullet) => {
+                app.stage.removeChild(bullet.current);
+            });
+            bulletsObj = {};
+            Object.values(asteroidsObj).forEach((asteroid) => {
+                app.stage.removeChild(asteroid.current);
+            });
+            asteroidsObj = {};
+            earth.current.texture = PIXI.Texture.from('images/earth.png');
+            count = 0;
+            state = "play";
+            play = true;
+            text.style.fontSize = 24;
+            text.x = window.innerWidth - 1.5 * text.width;
+            text.y = 30;
+            gameOver = false;
+            window.removeEventListener("click", restart);
+        }
+
         app.ticker.add(delta => {
             if (state !== "pause") {
                 if (play) {
                     loop(delta);
                 } else {
                     if (!gameOver) {
+                        if (count > bestCount) {
+                            localStorage.setItem("spaceGameBestCount", count + '');
+                        }
                         gameOverAnimate();
                         gameOver = true;
                     }
